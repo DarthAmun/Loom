@@ -1,0 +1,4 @@
+# Single-package workspace for Phase 0. Will likely split into an Analog.js
+# app + a shared engine package once the UI phases start (see README).
+packages:
+  - '.'
