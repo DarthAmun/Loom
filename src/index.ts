@@ -5,6 +5,7 @@ export * from "./entities/types.js"
 export { EntityRegistry } from "./entities/registry.js"
 export { safeParseEntity, type EntityParseResult } from "./entities/schema.js"
 export { GameEngine } from "./engine/engine.js"
+export { evaluateScalingRule } from "./engine/scalingRule.js"
 
 export type { Character, EntityInstance, GameEvent } from "./character/types.js"
 
@@ -15,5 +16,5 @@ export { type StoredCharacter } from "./storage/db.js"
 export { allMechanics } from "./data/mechanics/index.js"
 export { allPackageEntities } from "./data/packages/index.js"
 
-export { ProficiencyBonus, type ProficiencyRank } from "./core/proficiency.js"
+export { ProficiencyBonus, rankAtLeast, PROFICIENCY_RANK_ORDER, type ProficiencyRank } from "./core/proficiency.js"
 export { type DurabilityTier } from "./core/scaling.js"
