@@ -1,0 +1,76 @@
+name: Deploy web app to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you trigger a redeploy from the Actions tab without a new commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; a newer push cancels an in-flight one
+# rather than queuing behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type-check and test the engine package
+        run: |
+          pnpm typecheck
+          pnpm test
+
+      # apps/web is a static SPA (ssr:false, static:true — see
+      # apps/web/vite.config.ts) served from a project subpath
+      # (https://<user>.github.io/<repo>/), not the domain root, so the
+      # build needs to know that base path for asset URLs.
+      - name: Build web app
+        run: pnpm --filter web exec vite build --base=/${{ github.event.repository.name }}/
+
+      # Vite rewrites asset URLs for --base but doesn't touch an existing
+      # <base href> tag in index.html (apps/web/index.html hardcodes
+      # <base href="/" /> since local dev serves from the root) — Angular
+      # Router reads that tag to resolve routes, so it has to match the
+      # real deployed path or routing breaks one level down.
+      - name: Fix <base href> for the GitHub Pages subpath
+        run: |
+          sed -i 's#<base href="/" />#<base href="/${{ github.event.repository.name }}/" />#' apps/web/dist/client/index.html
+
+      # GitHub Pages has no server-side rewrites, so a deep link or a
+      # refresh on a client-routed URL (e.g. /entities/foo) 404s by
+      # default. Serving the same SPA shell as the 404 page is the
+      # standard workaround: Angular Router then resolves the route
+      # client-side once the shell loads.
+      - name: Add SPA fallback for client-side routing
+        run: cp apps/web/dist/client/index.html apps/web/dist/client/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist/client
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

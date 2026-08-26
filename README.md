@@ -8,45 +8,108 @@ schema and resolution engine described in
   mechanics, 3 archetype packages, the trigger-bus engine, a console demo.
 - **Phase 1** (done): Dexie/IndexedDB storage for Entities and Characters,
   wired to Layer 0's core math.
-- Phase 2+ (not started): entity editor UI (Angular + signals), character
-  builder, prerequisite graph, provenance/balance tooling. See the brief.
-
-No UI yet — that starts at Phase 2.
+- **Phase 2** (done): a minimal Entity editor UI — Angular + signals, via
+  Analog.js (apps/web).
+- Phase 3+ (not started): character builder, prerequisite graph,
+  provenance/balance tooling. See the brief.
 
 ## Stack
 
 Per the brief: pnpm + TypeScript, matching [DM's Tome](../DmsTome)'s
-tooling conventions. The brief's *original* choice of Vue/Nuxt for later
-phases has been swapped for **Angular with signals** — [Analog.js](https://analogjs.org)
-is the closest equivalent to Nuxt (file-based routing, SSR, Vite-based) and
-is the natural pick once Phase 2's entity editor needs a UI. None of that
-matters yet: Phase 0 has zero framework dependency either way.
+tooling conventions. The brief's *original* choice of Vue/Nuxt for the UI
+has been swapped for **Angular with signals** — [Analog.js](https://analogjs.org)
+is the closest equivalent to Nuxt (file-based routing, SSR, Vite-based).
+
+The repo is a pnpm workspace: `.` (root) is the engine package (Layers
+0–4, storage — everything below), `apps/web` is the Analog.js UI, which
+depends on the engine package by its workspace name (`loom`), resolved
+straight from TypeScript source (no build step) via
+`package.json`'s `"exports": { ".": "./src/index.ts" }`.
 
 ## Running it
 
 ```bash
 pnpm install
-pnpm demo            # Phase 0 console demo: Strike -> strike.hit -> Sneak Attack
-pnpm demo:storage    # Phase 1 console demo: same, but sourced from Dexie/IndexedDB
-pnpm test            # vitest suite (engine + storage)
+pnpm demo               # Phase 0 console demo: Strike -> strike.hit -> Sneak Attack
+pnpm demo:storage       # Phase 1 console demo: same, but sourced from Dexie/IndexedDB
+pnpm test               # vitest suite (engine + storage + schema)
 pnpm typecheck
+pnpm --filter web dev   # Phase 2 UI, http://localhost:5173
 ```
 
 ## Layout
 
 ```
 src/core/            Layer 0 — proficiency formula, level-scaling curves
-src/entities/         Layer 1/2/3 types — Entity, Effect, Hook + supporting types
-src/character/         Layer 4 — Character, EntityInstance, GameEvent
+src/entities/         Layer 1/2/3 types — Entity, Effect, Hook + supporting types; schema.ts (zod validation)
+src/character/         Layer 4 — Character, EntityInstance, GameEvent; fixtures.ts, factory.ts
 src/engine/            the resolution engine: checks, conditions, effect resolution, trigger bus
 src/data/mechanics/    the 15 mechanics from the brief, drafted as Entities
 src/data/packages/     the 3 archetype packages (martial/wraps, caster/variant, hooks)
 src/storage/           Phase 1 — Dexie db, entityStore, characterStore
+src/index.ts           Phase 2 — public API surface consumed by apps/web
 src/main.ts            Phase 0 deliverable-4 console demo
 src/main-storage.ts     Phase 1 console demo (seed -> load -> resolve, all through storage)
 test/engine.test.ts    Phase 0 scenarios, asserted
 test/storage.test.ts   Phase 1: entity/character CRUD, Map round-trips, registry bridging
+test/schema.test.ts    Phase 2: zod validation of real (and broken) Entity JSON
+apps/web/              Phase 2 — Analog.js UI: entity list + JSON review/edit form
 ```
+
+## Phase 2 — entity editor UI
+
+Scope, per the user: generation happens *outside* the app (an LLM drafts
+Entity JSON elsewhere); the editor's job is to let that JSON be pasted in,
+validated, reviewed, edited, and saved — not to generate it. So the UI is
+deliberately just:
+
+- `apps/web/src/app/pages/index.page.ts` — list of stored Entities (name,
+  id, tags, cost), a "Load draft data" button (seeds Phase 0's drafted
+  mechanics), a "New Entity" link.
+- `apps/web/src/app/pages/entities/[id].page.ts` — the whole editor: a
+  JSON textarea, live validation (JSON syntax + `src/entities/schema.ts`'s
+  zod schema) shown as a green "Valid" summary or a red error list, and
+  Save/Delete. Editing an existing entity's `id` field and saving performs
+  a rename (the old row is deleted, not left as an orphaned duplicate).
+- `apps/web/src/app/services/entity-store.service.ts` — a signals-based
+  wrapper around `entityStore` from the engine package.
+
+`src/entities/schema.ts` is a zod mirror of `src/entities/types.ts`,
+needed because pasted JSON has no compile-time guarantee of matching the
+schema — `types.ts`'s interfaces only check shape for code written *in*
+this package. It's the recursive-`variant`-effect case (see Phase 0's
+report) that makes this worth a real schema library rather than hand-rolled
+checks: `z.lazy` handles the self-reference cleanly.
+
+### Debugging note: Vite pulling engine source into Angular's compiler
+
+Getting `apps/web` to import the engine package's plain TypeScript
+directly (no build step) surfaced a real bug worth recording. Requests for
+`src/index.ts` (and anything it transitively imported) were silently
+returning **empty** module bodies — no error, no console output — which
+then surfaced downstream as `SyntaxError: does not provide an export named
+'allMechanics'`, pointing at the wrong file entirely.
+
+Root cause: `@analogjs/vite-plugin-angular` runs Angular's TypeScript
+compiler over every `.ts` module Vite transforms, excluding anything whose
+path contains `node_modules`. The `loom` workspace package is a pnpm
+symlink (`apps/web/node_modules/loom -> ../../..`); Vite's default
+`resolve.preserveSymlinks: false` resolves that symlink to its **realpath**
+before handing the id to plugins, which no longer contains `node_modules`
+— so the exclude never matched, and the engine package's plain TS (zero
+Angular decorators) got compiled under `apps/web`'s stricter tsconfig
+(`noPropertyAccessFromIndexSignature`, which the engine package doesn't
+opt into). `engine.ts`'s `ctx.event?.payload.degree`-style index-signature
+access failed that check, and — because Angular's compiler emits per
+*program*, not per-file the way esbuild does — one file's hard error
+silently emptied every other file's output in the same compilation too.
+
+Fix: `resolve.preserveSymlinks: true` in `apps/web/vite.config.ts` keeps
+the symlinked path intact, so the Angular plugin's `node_modules` exclude
+matches correctly and the engine package gets handled by Vite's default
+(non-Angular) TS transform instead. Documented in that file and here in
+case a similar silent-empty-module symptom shows up again when this
+workspace grows more linked packages.
 
 ## Phase 1 — storage
 

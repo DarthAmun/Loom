@@ -1,4 +1,6 @@
-# Single-package workspace for Phase 0. Will likely split into an Analog.js
-# app + a shared engine package once the UI phases start (see README).
+# "." is the engine package (Layers 0-4, storage — see README). "apps/*"
+# holds the UI; Phase 2's Analog.js app lives at apps/web and depends on the
+# engine package via the workspace protocol.
 packages:
   - '.'
+  - 'apps/*'
