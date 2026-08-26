@@ -7,13 +7,18 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "demo": "tsx src/main.ts",
+    "demo:storage": "tsx src/main-storage.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",
+    "fake-indexeddb": "^6.2.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "dexie": "^4.4.5"
   }
 }

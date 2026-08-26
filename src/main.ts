@@ -4,22 +4,7 @@ import { allMechanics } from "./data/mechanics/index.js"
 import { allPackageEntities } from "./data/packages/index.js"
 import { ProficiencyBonus } from "./core/proficiency.js"
 import { acEnvelope } from "./core/scaling.js"
-import type { Character, EntityInstance } from "./character/types.js"
-
-function makeCharacter(params: { hp: number; level?: number; activeEntities?: EntityInstance[] }): Character {
-  return {
-    attributes: {},
-    level: params.level ?? 1,
-    proficiencies: new Map(),
-    resources: new Map([["hp", { current: params.hp, max: params.hp }]]),
-    activeEntities: params.activeEntities ?? [],
-  }
-}
-
-function hp(character: Character): string {
-  const res = character.resources.get("hp")
-  return res ? `${res.current}/${res.max}` : "?"
-}
+import { makeCharacter, hpLabel } from "./character/fixtures.js"
 
 // Deliverable 4: prove the trigger bus end-to-end — a Strike resolves,
 // fires "strike.hit", and Sneak Attack (subscribed to that event) checks its
@@ -58,7 +43,7 @@ function main(): void {
     })
 
     console.log(engine.trace.join("\n"))
-    console.log(`-> degree: ${result.degree}, total damage: ${result.damage}, target hp: ${hp(target)}`)
+    console.log(`-> degree: ${result.degree}, total damage: ${result.damage}, target hp: ${hpLabel(target)}`)
   }
 }
 

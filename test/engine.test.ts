@@ -3,17 +3,7 @@ import { EntityRegistry } from "../src/entities/registry.js"
 import { GameEngine, resolveEffect, type ResolutionContext } from "../src/engine/engine.js"
 import { allMechanics } from "../src/data/mechanics/index.js"
 import { allPackageEntities } from "../src/data/packages/index.js"
-import type { Character, EntityInstance } from "../src/character/types.js"
-
-function makeCharacter(params: { hp: number; level?: number; activeEntities?: EntityInstance[] }): Character {
-  return {
-    attributes: {},
-    level: params.level ?? 1,
-    proficiencies: new Map(),
-    resources: new Map([["hp", { current: params.hp, max: params.hp }]]),
-    activeEntities: params.activeEntities ?? [],
-  }
-}
+import { makeCharacter } from "../src/character/fixtures.js"
 
 function buildRegistry(): EntityRegistry {
   const registry = new EntityRegistry()

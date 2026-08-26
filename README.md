@@ -1,8 +1,17 @@
-# Loom — Phase 0: core resolution engine
+# Loom — a custom d20 RPG engine
 
-A plain TypeScript package (no framework) proving the resolution engine
-described in [claude-code-brief.md](./claude-code-brief.md) works before
-anything depends on it. No UI, no storage — that's Phase 1+.
+A plain TypeScript package (no framework yet) implementing the layered
+schema and resolution engine described in
+[claude-code-brief.md](./claude-code-brief.md).
+
+- **Phase 0** (done): core resolution engine — Layer 0–4 types, 15 drafted
+  mechanics, 3 archetype packages, the trigger-bus engine, a console demo.
+- **Phase 1** (done): Dexie/IndexedDB storage for Entities and Characters,
+  wired to Layer 0's core math.
+- Phase 2+ (not started): entity editor UI (Angular + signals), character
+  builder, prerequisite graph, provenance/balance tooling. See the brief.
+
+No UI yet — that starts at Phase 2.
 
 ## Stack
 
@@ -17,23 +26,50 @@ matters yet: Phase 0 has zero framework dependency either way.
 
 ```bash
 pnpm install
-pnpm demo        # console demo: Strike -> strike.hit -> Sneak Attack
-pnpm test        # vitest suite
+pnpm demo            # Phase 0 console demo: Strike -> strike.hit -> Sneak Attack
+pnpm demo:storage    # Phase 1 console demo: same, but sourced from Dexie/IndexedDB
+pnpm test            # vitest suite (engine + storage)
 pnpm typecheck
 ```
 
 ## Layout
 
 ```
-src/core/           Layer 0 — proficiency formula, level-scaling curves
-src/entities/        Layer 1/2/3 types — Entity, Effect, Hook + supporting types
-src/character/        Layer 4 — Character, EntityInstance, GameEvent
-src/engine/           the resolution engine: checks, conditions, effect resolution, trigger bus
-src/data/mechanics/   the 15 mechanics from the brief, drafted as Entities
-src/data/packages/    the 3 archetype packages (martial/wraps, caster/variant, hooks)
-src/main.ts           deliverable-4 console demo
-test/engine.test.ts   same scenarios, asserted
+src/core/            Layer 0 — proficiency formula, level-scaling curves
+src/entities/         Layer 1/2/3 types — Entity, Effect, Hook + supporting types
+src/character/         Layer 4 — Character, EntityInstance, GameEvent
+src/engine/            the resolution engine: checks, conditions, effect resolution, trigger bus
+src/data/mechanics/    the 15 mechanics from the brief, drafted as Entities
+src/data/packages/     the 3 archetype packages (martial/wraps, caster/variant, hooks)
+src/storage/           Phase 1 — Dexie db, entityStore, characterStore
+src/main.ts            Phase 0 deliverable-4 console demo
+src/main-storage.ts     Phase 1 console demo (seed -> load -> resolve, all through storage)
+test/engine.test.ts    Phase 0 scenarios, asserted
+test/storage.test.ts   Phase 1: entity/character CRUD, Map round-trips, registry bridging
 ```
+
+## Phase 1 — storage
+
+`src/storage/db.ts` follows [DM's Tome](../DmsTome)'s `useDb.ts` conventions:
+a `Dexie` subclass with versioned `.stores()`, a lazy `getDb()` singleton,
+a `now()` timestamp helper, and store modules grouping CRUD by table
+(`entityStore`, `characterStore`). One deliberate difference: DM's Tome
+JSON-stringifies nested columns because its schema mirrors a prior SQLite
+layout — Loom has no legacy schema to mirror, so `Entity`'s nested fields
+and `Character`'s `Map`-typed fields (`proficiencies`, `resources`) are
+stored as native objects/Maps; IndexedDB's structured-clone storage handles
+both without a serialization step (verified in `storage.test.ts`).
+
+There's no browser yet (Phase 2 brings the UI), so `pnpm demo:storage` and
+the storage tests run against [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB)
+in Node. That's a Phase 1 stand-in, not a real dependency — Dexie talks to
+whatever `indexedDB` global is present, and a browser's native
+implementation will replace this without any code change once there's a UI.
+
+`characterStore.create` ties Layer 0 to Layer 4 directly: starting HP comes
+from `classHpForTier(tier, level)` rather than being typed in by hand, so
+"Core Math + Dexie storage" (the brief's Phase 1 line) is one connected
+piece of work, not two unrelated ones sharing a folder.
 
 ## Deliverable 4 — trigger bus proof
 
