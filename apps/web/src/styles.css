@@ -94,14 +94,6 @@ body {
   background: var(--accent-soft-bg);
   color: var(--accent-soft-text);
 }
-.chip-wrap {
-  background: var(--wrap-soft-bg);
-  color: var(--wrap-soft-text);
-}
-.chip-gold {
-  background: var(--gold-soft-bg);
-  color: var(--gold-soft-text);
-}
 
 .pill {
   padding: 5px 11px;

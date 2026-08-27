@@ -4,8 +4,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PROFICIENCY_RANK_ORDER, type Entity, type ProficiencyRank, type StoredCharacter } from 'loom';
 import { CharacterStoreService } from '../../services/character-store.service';
 import { EntityStoreService } from '../../services/entity-store.service';
-import { costLabel, relationshipKind, sourceOf } from '../../utils/entity-summary';
-import { builderWarnings, checkEligibility, type Eligibility } from '../../utils/eligibility';
+import { costLabel, relationshipKind, RELATIONSHIP_COLOR, sourceOf } from '../../utils/entity-summary';
+import { builderWarnings, buildEligibilityContext, checkEligibility, type Eligibility, type EligibilityContext } from '../../utils/eligibility';
 
 interface ActiveRow {
   entity: Entity;
@@ -81,9 +81,14 @@ interface CandidateRow {
             <div style="display:flex;flex-direction:column;gap:8px">
               @for (r of resourceEntries(); track r.key) {
                 <div style="display:flex;flex-direction:column;gap:4px">
-                  <span style="display:flex;justify-content:space-between;font:400 11.5px var(--font-sans)">
+                  <span style="display:flex;justify-content:space-between;align-items:center;font:400 11.5px var(--font-sans)">
                     <span style="color:var(--text-muted)">{{ r.key }}</span>
-                    <span style="font:500 10.5px var(--font-mono)">{{ r.current }} / {{ r.max }}</span>
+                    <span style="display:flex;align-items:center;gap:5px">
+                      <button type="button" class="mini-x" (click)="adjustResource(c, r.key, -1)">−</button>
+                      <span style="font:500 10.5px var(--font-mono)">{{ r.current }} / {{ r.max }}</span>
+                      <button type="button" class="mini-x" (click)="adjustResource(c, r.key, 1)">+</button>
+                      <button type="button" class="mini-x" (click)="removeResource(c, r.key)">×</button>
+                    </span>
                   </span>
                   <span style="height:5px;border-radius:3px;background:var(--border-strong);display:block">
                     <span [style.width.%]="r.pct" style="display:block;height:5px;border-radius:3px;background:var(--accent)"></span>
@@ -93,6 +98,11 @@ interface CandidateRow {
               @if (resourceEntries().length === 0) {
                 <span style="font:400 11px var(--font-sans);color:var(--text-dim)">none</span>
               }
+            </div>
+            <div style="display:flex;gap:4px;margin-top:4px">
+              <input #resKey type="text" placeholder="key" class="mini-input" style="width:64px" />
+              <input #resMax type="number" placeholder="max" class="mini-input" style="width:50px" />
+              <button type="button" class="link-btn" (click)="addResource(c, resKey.value, resMax.value); resKey.value = ''; resMax.value = ''">+ add</button>
             </div>
           </div>
 
@@ -321,16 +331,24 @@ export default class CharacterBuilderPage {
     return [...c.resources.entries()].map(([key, r]) => ({ key, current: r.current, max: r.max, pct: r.max > 0 ? (100 * r.current) / r.max : 0 }));
   });
 
+  // Shared by activeRows and candidates below — depends only on
+  // character+entities, not on `query`, so typing in the filter box doesn't
+  // rebuild the activeIds Set / entitiesById Map on every keystroke (Angular
+  // computed()s memoize on their own dependencies).
+  protected readonly eligibilityContext = computed<EligibilityContext | null>(() => {
+    const c = this.character();
+    return c ? buildEligibilityContext(c, this.store.entities()) : null;
+  });
+
   protected readonly activeRows = computed<ActiveRow[]>(() => {
     const c = this.character();
-    if (!c) return [];
-    const all = this.store.entities();
+    const ctx = this.eligibilityContext();
+    if (!c || !ctx) return [];
     return c.activeEntities
       .map((instance) => {
-        const entity = all.find((e) => e.id === instance.entityId);
+        const entity = ctx.entitiesById.get(instance.entityId);
         if (!entity) return null;
-        const kind = relationshipKind(entity);
-        const stripeColor = kind === 'wraps' ? 'var(--wrap)' : kind === 'trigger' ? 'var(--accent)' : kind === 'hook' ? 'var(--hook)' : kind === 'applies' ? 'var(--applies)' : 'var(--border-strong)';
+        const stripeColor = RELATIONSHIP_COLOR[relationshipKind(entity)];
         const duration = instance.duration ? `${instance.duration.value ?? ''} ${instance.duration.unit}`.trim() : null;
         return { entity, instanceSource: instance.source ?? 'added manually', duration, stripeColor };
       })
@@ -344,13 +362,13 @@ export default class CharacterBuilderPage {
   });
 
   protected readonly candidates = computed<CandidateRow[]>(() => {
-    const c = this.character();
-    if (!c) return [];
+    const ctx = this.eligibilityContext();
+    if (!ctx) return [];
+    const allEntities = this.store.entities();
     const q = this.query().trim().toLowerCase();
-    return this.store
-      .entities()
+    return allEntities
       .filter((e) => !q || e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q) || e.tags.some((t) => t.toLowerCase().includes(q)))
-      .map((entity) => ({ entity, eligibility: checkEligibility(entity, c, this.store.entities()) }))
+      .map((entity) => ({ entity, eligibility: checkEligibility(entity, ctx) }))
       .filter((row) => row.eligibility.status !== 'active')
       .sort((a, b) => (a.eligibility.status === 'eligible' ? -1 : 1) - (b.eligibility.status === 'eligible' ? -1 : 1));
   });
@@ -393,6 +411,27 @@ export default class CharacterBuilderPage {
     const next = new Map(c.proficiencies);
     next.delete(key);
     void this.persist(c, { proficiencies: next });
+  }
+
+  private updateResources(c: StoredCharacter, mutate: (next: StoredCharacter['resources']) => void): void {
+    const next = new Map(c.resources);
+    mutate(next);
+    void this.persist(c, { resources: next });
+  }
+
+  addResource(c: StoredCharacter, key: string, rawMax: string): void {
+    const trimmed = key.trim();
+    if (!trimmed) return;
+    const max = Math.max(0, Number(rawMax) || 0);
+    this.updateResources(c, (next) => next.set(trimmed, { current: max, max }));
+  }
+  removeResource(c: StoredCharacter, key: string): void {
+    this.updateResources(c, (next) => next.delete(key));
+  }
+  adjustResource(c: StoredCharacter, key: string, delta: number): void {
+    const current = c.resources.get(key);
+    if (!current) return;
+    this.updateResources(c, (next) => next.set(key, { ...current, current: Math.min(current.max, Math.max(0, current.current + delta)) }));
   }
 
   addActive(c: StoredCharacter, entityId: string): void {

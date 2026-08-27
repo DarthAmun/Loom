@@ -1,8 +1,8 @@
 import { Component, OnInit, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { EntityStoreService } from '../services/entity-store.service';
-import { costLabel } from '../utils/entity-summary';
-import { computeEdges, computeGraphNodes, type EdgeKind, type GraphColumn, type GraphNode } from '../utils/graph';
+import { costLabel, RELATIONSHIP_COLOR } from '../utils/entity-summary';
+import { computeEdges, computeGraphNodes, type GraphColumn, type GraphNode } from '../utils/graph';
 
 const COLUMN_X: Record<GraphColumn, number> = { core: 40, mid: 400, packages: 760 };
 const COLUMN_LABEL: Record<GraphColumn, string> = { core: 'core', mid: 'wraps / listeners', packages: 'packages / invented' };
@@ -10,12 +10,6 @@ const CARD_WIDTH = 190;
 const CARD_HEIGHT = 54;
 const ROW_HEIGHT = 78;
 const TOP_PADDING = 46;
-const EDGE_COLOR: Record<EdgeKind, string> = {
-  wraps: 'var(--wrap)',
-  trigger: 'var(--accent)',
-  hook: 'var(--hook)',
-  applies: 'var(--applies)',
-};
 
 interface PositionedNode extends GraphNode {
   x: number;
@@ -213,7 +207,7 @@ export default class GraphPage implements OnInit {
       const midX = (x1 + x2) / 2;
       out.push({
         path: `M${x1} ${y1} C${midX} ${y1} ${midX} ${y2} ${x2} ${y2}`,
-        color: EDGE_COLOR[edge.kind],
+        color: RELATIONSHIP_COLOR[edge.kind],
         dashed: edge.kind === 'trigger',
         resolved: edge.resolved,
         from: edge.from,

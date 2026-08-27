@@ -1,6 +1,9 @@
 import type { Entity, EntityRef } from 'loom';
+import { sourceOf, type RelationshipKind } from './entity-summary';
 
-export type EdgeKind = 'wraps' | 'trigger' | 'hook' | 'applies';
+// An edge always connects two entities, so it's never 'none' — the one
+// RelationshipKind case that doesn't apply here.
+export type EdgeKind = Exclude<RelationshipKind, 'none'>;
 
 export interface GraphEdge {
   from: EntityRef;
@@ -55,22 +58,16 @@ export interface GraphNode {
  * target) — an exhaustive 19-node layout would mostly be islands with
  * nothing to say; the list page already covers the full catalog. */
 export function computeGraphNodes(entities: readonly Entity[], edges: readonly GraphEdge[]): GraphNode[] {
-  const connected = new Set<string>();
-  for (const edge of edges) {
-    connected.add(edge.from);
-    connected.add(edge.to);
-  }
-
   const isSource = new Set(edges.map((e) => e.from));
   const isTarget = new Set(edges.map((e) => e.to));
 
   return entities
-    .filter((e) => connected.has(e.id))
+    .filter((e) => isSource.has(e.id) || isTarget.has(e.id))
     .map((entity) => {
-      const sourceTag = entity.tags.find((t) => t.startsWith('source:'))?.slice('source:'.length);
+      const source = sourceOf(entity);
       let column: GraphColumn;
       if (isTarget.has(entity.id) && !isSource.has(entity.id)) column = 'core';
-      else if (sourceTag && sourceTag !== 'core') column = 'packages';
+      else if (source !== 'core' && source !== 'unknown') column = 'packages';
       else column = 'mid';
       return { entity, column };
     });

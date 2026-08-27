@@ -23,7 +23,10 @@ function combatantTags(combatant: Character | undefined, registry: EntityRegistr
   return tags
 }
 
-function compare(value: number, op: "gte" | "lte" | "eq", target: number): boolean {
+/** Shared with prerequisites.ts's evaluatePrerequisite — both evaluate a
+ * numeric field on a Character against a threshold, just against different
+ * spec shapes (ConditionSpec vs. Prerequisite). */
+export function compare(value: number, op: "gte" | "lte" | "eq", target: number): boolean {
   if (op === "gte") return value >= target
   if (op === "lte") return value <= target
   return value === target

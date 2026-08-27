@@ -68,7 +68,7 @@ function flattenSetAmounts(effect: Entity['effects'][number]): number[] {
 export function describeEntity(entity: Entity, allEntities: readonly Entity[]): string {
   const clauses: string[] = [];
 
-  const wrapsStrike = entity.wraps === 'core.strike' || (entity.wraps && allEntities.find((e) => e.id === entity.wraps)?.wraps === 'core.strike');
+  const wrapsStrike = entity.wraps === 'core.strike' || (entity.wraps && findEntity(entity.wraps, allEntities)?.wraps === 'core.strike');
   const isStrikeLike = entity.id === 'core.strike' || wrapsStrike;
 
   if (entity.wraps) {
@@ -150,13 +150,32 @@ export function sourceColor(source: string): string {
   return FALLBACK_SOURCE_COLORS[hash % FALLBACK_SOURCE_COLORS.length]!;
 }
 
-export function relationshipKind(entity: Entity): 'wraps' | 'trigger' | 'hook' | 'applies' | 'none' {
+/** Canonical union for "how does this entity relate to others" — graph.ts's
+ * EdgeKind is `Exclude<RelationshipKind, 'none'>` (an edge always connects
+ * two entities, so it never has 'none'), kept as the derived type rather
+ * than the source, since this module is the shared one (consumed by both
+ * the graph page and the character builder) and shouldn't depend back on a
+ * page-adjacent util for its own return type. */
+export type RelationshipKind = 'wraps' | 'trigger' | 'hook' | 'applies' | 'none';
+
+export function relationshipKind(entity: Entity): RelationshipKind {
   if (entity.wraps) return 'wraps';
   if (entity.trigger) return 'trigger';
   if (entity.hooks?.length) return 'hook';
   if (entity.effects.some((e) => e.kind === 'applyEntity')) return 'applies';
   return 'none';
 }
+
+/** Indexed by relationshipKind's return value — shared by the graph page's
+ * edge coloring and the character builder's active-entity stripe color, so
+ * the same relationship reads the same color everywhere it appears. */
+export const RELATIONSHIP_COLOR: Record<RelationshipKind, string> = {
+  wraps: 'var(--wrap)',
+  trigger: 'var(--accent)',
+  hook: 'var(--hook)',
+  applies: 'var(--applies)',
+  none: 'var(--border-strong)',
+};
 
 export function findEntity(id: EntityRef, all: readonly Entity[]): Entity | undefined {
   return all.find((e) => e.id === id);

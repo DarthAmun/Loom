@@ -1,13 +1,12 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import type { DurabilityTier } from 'loom';
+import { classHpForTier, type DurabilityTier } from 'loom';
 import { CharacterStoreService } from '../../services/character-store.service';
 
-const TIERS: { value: DurabilityTier; label: string }[] = [
-  { value: 'martial', label: 'martial (10 hp/lv)' },
-  { value: 'hybrid', label: 'hybrid (8 hp/lv)' },
-  { value: 'caster', label: 'caster (6 hp/lv)' },
-];
+// hp/level shown per tier comes from Layer 0's classHpForTier, not a
+// hand-typed number — stays correct if the underlying envelope is retuned.
+const TIER_VALUES: DurabilityTier[] = ['martial', 'hybrid', 'caster'];
+const TIERS = TIER_VALUES.map((value) => ({ value, label: `${value} (${classHpForTier(value, 1)} hp/lv)` }));
 
 @Component({
   selector: 'app-character-list',

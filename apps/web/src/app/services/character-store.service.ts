@@ -19,19 +19,19 @@ export class CharacterStoreService {
     return characterStore.get(id);
   }
 
+  // None of these re-run refresh(): the only consumer of the `characters`
+  // list signal is the character list page, which refreshes itself on
+  // mount — a builder page editing one character's attributes/active
+  // entities has no use for a full IndexedDB re-list on every keystroke.
   async create(params: NewCharacterParams): Promise<StoredCharacter> {
-    const created = await characterStore.create(params);
-    await this.refresh();
-    return created;
+    return characterStore.create(params);
   }
 
   async update(id: number, changes: Partial<Character>): Promise<void> {
     await characterStore.update(id, changes);
-    await this.refresh();
   }
 
   async remove(id: number): Promise<void> {
     await characterStore.delete(id);
-    await this.refresh();
   }
 }

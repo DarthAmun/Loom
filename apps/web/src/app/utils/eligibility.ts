@@ -1,4 +1,4 @@
-import { rankAtLeast, type Character, type Entity } from 'loom';
+import { evaluatePrerequisites, type Character, type Entity } from 'loom';
 import { prerequisiteSummary } from './entity-summary';
 
 export type EligibilityStatus = 'eligible' | 'active' | 'blocked' | 'conflict';
@@ -8,50 +8,46 @@ export interface Eligibility {
   reason: string;
 }
 
-function checkPrerequisite(prereq: Entity['prerequisites'][number], character: Character, activeIds: ReadonlySet<string>): Eligibility {
-  switch (prereq.kind) {
-    case 'level':
-      return character.level >= prereq.minLevel
-        ? { status: 'eligible', reason: `level ${prereq.minLevel} — you're ${character.level}` }
-        : { status: 'blocked', reason: `needs level ${prereq.minLevel} — you're ${character.level}` };
-    case 'attribute': {
-      const value = character.attributes[prereq.attribute] ?? 0;
-      return value >= prereq.minValue
-        ? { status: 'eligible', reason: `${prereq.attribute} ≥ ${prereq.minValue} — you have ${value}` }
-        : { status: 'blocked', reason: `needs ${prereq.attribute} ≥ ${prereq.minValue} — you have ${value}` };
-    }
-    case 'proficiency': {
-      const rank = character.proficiencies.get(prereq.proficiencyKey) ?? 'untrained';
-      return rankAtLeast(rank, prereq.minRank)
-        ? { status: 'eligible', reason: `${prereq.proficiencyKey} ${prereq.minRank} — you're ${rank}` }
-        : { status: 'blocked', reason: `needs ${prereq.proficiencyKey} ${prereq.minRank} — you're ${rank}` };
-    }
-    case 'entity':
-      return activeIds.has(prereq.entityId)
-        ? { status: 'eligible', reason: `${prereq.entityId} active` }
-        : { status: 'blocked', reason: `needs ${prereq.entityId} active` };
-  }
+export interface EligibilityContext {
+  character: Character;
+  activeIds: ReadonlySet<string>;
+  entitiesById: ReadonlyMap<string, Entity>;
+}
+
+function activeIdsOf(character: Character): Set<string> {
+  return new Set(character.activeEntities.map((i) => i.entityId));
+}
+
+/** Built once per render (not once per candidate) — `checkEligibility` gets
+ * called once per entity in the picker on every filter-box keystroke, so
+ * the Set/Map here are shared across all of them instead of each call
+ * re-deriving activeIds from character.activeEntities and re-scanning
+ * allEntities with .find(). */
+export function buildEligibilityContext(character: Character, allEntities: readonly Entity[]): EligibilityContext {
+  return {
+    character,
+    activeIds: activeIdsOf(character),
+    entitiesById: new Map(allEntities.map((e) => [e.id, e])),
+  };
 }
 
 /** Real prerequisite/conflict evaluation against a Character — the thing
  * Phase 3 ("character builder") is about. Conflicts are checked both ways
  * (the candidate's own `conflicts` list, and any active entity's list
  * naming the candidate) since nothing in the schema guarantees a conflict
- * is declared on just one side. */
-export function checkEligibility(entity: Entity, character: Character, allEntities: readonly Entity[]): Eligibility {
-  const activeIds = new Set(character.activeEntities.map((i) => i.entityId));
-  if (activeIds.has(entity.id)) return { status: 'active', reason: 'already active' };
+ * is declared on just one side. Per-prerequisite pass/fail logic lives in
+ * the engine (evaluatePrerequisites, mirroring evaluateConditions) — this
+ * layers UI-facing status/conflict handling on top. */
+export function checkEligibility(entity: Entity, ctx: EligibilityContext): Eligibility {
+  if (ctx.activeIds.has(entity.id)) return { status: 'active', reason: 'already active' };
 
-  for (const activeId of activeIds) {
+  for (const activeId of ctx.activeIds) {
     if (entity.conflicts.includes(activeId)) return { status: 'conflict', reason: `already active from ${activeId}` };
-    const activeEntity = allEntities.find((e) => e.id === activeId);
-    if (activeEntity?.conflicts.includes(entity.id)) return { status: 'conflict', reason: `already active from ${activeId}` };
+    if (ctx.entitiesById.get(activeId)?.conflicts.includes(entity.id)) return { status: 'conflict', reason: `already active from ${activeId}` };
   }
 
-  for (const prereq of entity.prerequisites) {
-    const result = checkPrerequisite(prereq, character, activeIds);
-    if (result.status === 'blocked') return result;
-  }
+  const result = evaluatePrerequisites(entity.prerequisites, { character: ctx.character, activeIds: ctx.activeIds });
+  if (!result.met) return { status: 'blocked', reason: result.reason };
 
   if (entity.prerequisites.length === 0) return { status: 'eligible', reason: 'no prerequisites' };
   return { status: 'eligible', reason: prerequisiteSummary(entity.prerequisites[0]!) };
@@ -65,13 +61,16 @@ export function checkEligibility(entity: Entity, character: Character, allEntiti
  * are real, computed checks, not placeholder copy. */
 export function builderWarnings(character: Character, allEntities: readonly Entity[]): string[] {
   const warnings: string[] = [];
-  const activeEntities = character.activeEntities
-    .map((instance) => allEntities.find((e) => e.id === instance.entityId))
-    .filter((e): e is Entity => !!e);
+  // Built once and reused across the loop below (rather than via
+  // buildEligibilityContext per iteration) — allEntities doesn't change
+  // between active entities, only each one's `withoutSelf` activeIds does.
+  const entitiesById = new Map(allEntities.map((e) => [e.id, e]));
+  const activeEntities = character.activeEntities.map((instance) => entitiesById.get(instance.entityId)).filter((e): e is Entity => !!e);
 
   for (const entity of activeEntities) {
     const withoutSelf: Character = { ...character, activeEntities: character.activeEntities.filter((i) => i.entityId !== entity.id) };
-    const result = checkEligibility(entity, withoutSelf, allEntities);
+    const ctx: EligibilityContext = { character: withoutSelf, activeIds: activeIdsOf(withoutSelf), entitiesById };
+    const result = checkEligibility(entity, ctx);
     if (result.status === 'blocked') warnings.push(`${entity.name} no longer meets its prerequisites — ${result.reason}`);
   }
 
