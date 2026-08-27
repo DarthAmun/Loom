@@ -44,6 +44,18 @@ const ScalingRuleSchema = z.discriminatedUnion("by", [
   z.object({ by: z.literal("proficiencyRank"), amounts: z.record(z.string(), z.number()) }),
 ])
 
+const DiceExpressionSchema = z.object({
+  kind: z.literal("dice"),
+  count: z.union([z.number(), ScalingRuleSchema]),
+  faces: z.number(),
+})
+
+const ChoiceSourceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("entitiesByTag"), tag: z.string() }),
+  z.object({ kind: z.literal("entitiesByRefs"), refs: z.array(z.string()) }),
+  z.object({ kind: z.literal("literal"), options: z.array(z.string()) }),
+])
+
 // Effect is recursive (variant.variants: Effect[]) — z.lazy is the standard
 // zod pattern for self-referential schemas. Left untyped against the
 // hand-written `Effect` type deliberately: zod's inferred optional fields
@@ -57,7 +69,7 @@ const EffectSchema: z.ZodTypeAny = z.lazy(() =>
       kind: z.literal("value"),
       target: z.string(),
       op: z.enum(["+", "-", "×", "set"]),
-      amount: z.union([z.number(), ScalingRuleSchema]),
+      amount: z.union([z.number(), ScalingRuleSchema, DiceExpressionSchema]),
     }),
     z.object({
       kind: z.literal("applyEntity"),
@@ -74,12 +86,18 @@ const EffectSchema: z.ZodTypeAny = z.lazy(() =>
       check: CheckSpecSchema,
       onFail: z.literal("remove"),
     }),
+    z.object({
+      kind: z.literal("choice"),
+      bind: z.string(),
+      count: z.number(),
+      from: ChoiceSourceSchema,
+    }),
   ]),
 )
 
 const HookSchema = z.object({
   appliesTo: z.string(),
-  operation: z.enum(["override", "replaceCurve", "negateIfTagged"]),
+  operation: z.enum(["override", "replaceCurve", "negateIfTagged", "adjustIfTagged"]),
   value: z.unknown(),
 })
 
@@ -93,6 +111,7 @@ const ActionCostSchema = z.discriminatedUnion("type", [
 export const EntitySchema = z.object({
   id: z.string().min(1, "id is required"),
   name: z.string().min(1, "name is required"),
+  description: z.string().optional(),
   tags: z.array(z.string()),
   prerequisites: z.array(PrerequisiteSchema),
   conflicts: z.array(z.string()),

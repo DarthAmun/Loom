@@ -1,4 +1,4 @@
-import { BALANCE_LEVELS, evaluateScalingRule, type ActionCost, type ConditionSpec, type Effect, type Entity, type EntityRef, type ScalingRule } from 'loom';
+import { BALANCE_LEVELS, evaluateScalingRule, expectedDiceValue, isDiceExpression, type ActionCost, type ChoiceSource, type ConditionSpec, type DiceExpression, type Effect, type Entity, type EntityRef, type ScalingRule } from 'loom';
 
 export function costLabel(cost: ActionCost): string {
   switch (cost.type) {
@@ -51,6 +51,31 @@ function scalingSummary(rule: ScalingRule): string {
   return 'by level';
 }
 
+function diceSummary(dice: DiceExpression): string {
+  if (typeof dice.count === 'number') return `${dice.count}d${dice.faces}`;
+  return `d${dice.faces} × count ${scalingSummary(dice.count)}`;
+}
+
+/** Renders a value effect's amount (flat number, dice, or level/proficiency
+ * scaling) as a short display string — shared by describeEntity and
+ * describeEffect so the three amount shapes read consistently everywhere. */
+function amountSummary(amount: number | ScalingRule | DiceExpression): string {
+  if (typeof amount === 'number') return String(amount);
+  if (isDiceExpression(amount)) return diceSummary(amount);
+  return scalingSummary(amount);
+}
+
+function choiceSourceSummary(from: ChoiceSource): string {
+  switch (from.kind) {
+    case 'entitiesByTag':
+      return `tag:${from.tag}`;
+    case 'entitiesByRefs':
+      return `${from.refs.length} entities`;
+    case 'literal':
+      return `${from.options.length} options`;
+  }
+}
+
 /** Pulls flat numeric "set" leaves out of a (possibly nested) variant
  * effect tree — enough to show e.g. "6 / 12 / 18 damage" for a
  * castLevel-heightened spell without re-deriving the whole resolution engine. */
@@ -79,8 +104,7 @@ export function describeEntity(entity: Entity, allEntities: readonly Entity[]): 
     if (entity.condition?.length) clauses.push(`if ${entity.condition.map(conditionSummary).join(' and ')}`);
     const valueEffect = entity.effects.find((e) => e.kind === 'value');
     if (valueEffect?.kind === 'value') {
-      const scaled = typeof valueEffect.amount === 'object';
-      clauses.push(`${valueEffect.target} ${valueEffect.op}${scaled ? ` ${scalingSummary(valueEffect.amount as ScalingRule)}` : ` ${valueEffect.amount}`}`);
+      clauses.push(`${valueEffect.target} ${valueEffect.op} ${amountSummary(valueEffect.amount)}`);
     }
   } else if (entity.hooks?.length && entity.effects.length === 0) {
     const hook = entity.hooks[0]!;
@@ -250,16 +274,16 @@ export function relatedItems(entity: Entity, all: readonly Entity[]): RelatedIte
  * example) and a one-line count is more scannable than reproducing it. */
 export function describeEffect(effect: Effect): string {
   switch (effect.kind) {
-    case 'value': {
-      const amount = typeof effect.amount === 'number' ? String(effect.amount) : scalingSummary(effect.amount);
-      return `${effect.target} ${effect.op} ${amount}`;
-    }
+    case 'value':
+      return `${effect.target} ${effect.op} ${amountSummary(effect.amount)}`;
     case 'applyEntity':
       return `applies ${effect.entityId}${effect.duration ? ` for ${effect.duration.value ?? ''} ${effect.duration.unit}`.trimEnd() : ''}`;
     case 'variant':
       return `${effect.variants.length} variants, selected by ${effect.selectBy}`;
     case 'conditionalDuration':
       return `persists while a ${effect.check.against.kind === 'flatDC' ? `DC ${effect.check.against.dc}` : effect.check.against.key} check succeeds`;
+    case 'choice':
+      return `choose ${effect.count} from ${choiceSourceSummary(effect.from)}, bound as "${effect.bind}"`;
   }
 }
 
@@ -279,10 +303,25 @@ export interface ScalingChartPoint {
  * editor's bar chart — the same points the mock uses (1/5/10/15/20), and
  * the same `evaluateScalingRule` the engine itself resolves against, so
  * the chart can't drift from what a real character would actually get. */
+function chartPoints(valueAt: (level: number) => number): ScalingChartPoint[] {
+  return BALANCE_LEVELS.map((level) => ({ x: `lv ${level}`, y: valueAt(level) }));
+}
+
 export function scalingChartFor(entity: Entity): ScalingChartPoint[] | null {
   const valueEffect = entity.effects.find((e): e is Extract<Effect, { kind: 'value' }> => e.kind === 'value');
   if (!valueEffect || typeof valueEffect.amount !== 'object') return null;
-  const rule = valueEffect.amount;
+  const amount = valueEffect.amount;
+
+  if (isDiceExpression(amount)) {
+    // A flat die count ("2d6") has no level curve to chart; a level-scaled
+    // count does — plotted as expected value (count × average face), same
+    // math balance.ts uses so a chart and a balance row never drift apart.
+    if (typeof amount.count === 'number') return null;
+    if (amount.count.by === 'proficiencyRank') return null;
+    return chartPoints((level) => expectedDiceValue(amount, { level, castLevel: level }));
+  }
+
+  const rule = amount;
   if (rule.by === 'proficiencyRank') return null;
-  return BALANCE_LEVELS.map((level) => ({ x: `lv ${level}`, y: evaluateScalingRule(rule, { level, castLevel: level }) }));
+  return chartPoints((level) => evaluateScalingRule(rule, { level, castLevel: level }));
 }

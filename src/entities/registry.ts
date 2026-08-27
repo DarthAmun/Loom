@@ -23,4 +23,10 @@ export class EntityRegistry {
   tryGet(ref: EntityRef): Entity | undefined {
     return this.byId.get(ref)
   }
+
+  /** Every registered Entity carrying `tag` — the pool a `{ kind: "entities";
+   * tag }` ChoiceSource picks from (see engine/choice.ts). */
+  byTag(tag: string): Entity[] {
+    return [...this.byId.values()].filter((entity) => entity.tags.includes(tag))
+  }
 }

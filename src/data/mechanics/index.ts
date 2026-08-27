@@ -11,6 +11,7 @@ import { persistentFire } from "./persistentDamage.js"
 import { finesse } from "./weaponTraits.js"
 import { breathWeapon } from "./monsterAbilities.js"
 import { battleMedicine } from "./skillFeats.js"
+import { fireImmunity, fireResistance, fireWeakness } from "./resistances.js"
 import type { Entity } from "../../entities/types.js"
 
 // #6 Proficiency and #10 Spell Slots are deliberately absent here — both are
@@ -40,4 +41,7 @@ export const allMechanics: Entity[] = [
   finesse,
   breathWeapon,
   battleMedicine,
+  fireImmunity,
+  fireResistance,
+  fireWeakness,
 ]

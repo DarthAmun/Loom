@@ -6,7 +6,9 @@ export { EntityRegistry } from "./entities/registry.js"
 export { safeParseEntity, type EntityParseResult } from "./entities/schema.js"
 export { GameEngine } from "./engine/engine.js"
 export { evaluateScalingRule } from "./engine/scalingRule.js"
+export { expectedDiceValue } from "./engine/dice.js"
 export { evaluatePrerequisite, evaluatePrerequisites, type PrerequisiteEvalContext, type PrerequisiteResult } from "./engine/prerequisites.js"
+export { resolveChoiceOptions, firstOptionChooser, type Chooser } from "./engine/choice.js"
 
 export type { Character, EntityInstance, GameEvent } from "./character/types.js"
 

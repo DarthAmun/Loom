@@ -6,7 +6,8 @@
 // of this, mirroring how eligibility.ts wraps engine/prerequisites.ts.
 import { LevelScalingCurve } from "../core/scaling.js"
 import { evaluateScalingRule } from "../engine/scalingRule.js"
-import type { Effect, Entity, ScalingRule } from "./types.js"
+import { expectedDiceValue } from "../engine/dice.js"
+import { isDiceExpression, type Effect, type Entity, type ScalingRule } from "./types.js"
 
 /** Sample levels for balance comparisons — also reused by
  * entity-summary.ts's scalingChartFor, so a chart and a balance row for the
@@ -85,6 +86,31 @@ export function balanceReportFor(entity: Entity): BalanceReport {
   const unscaled: FlatRow[] = []
   const noEnvelope: NoEnvelopeRow[] = []
 
+  /** Shared envelope-comparison pipeline for a level-scaled amount — used by
+   * both a plain ScalingRule and a DiceExpression's (level-scaled) count,
+   * which differ only in how "actual" is computed at a given level. Nested
+   * here (rather than module-level) so it can push directly into this
+   * call's `comparable`/`noEnvelope` instead of taking them as params. */
+  function pushComparableOrNoEnvelope(target: string, rule: ScalingRule, actualAt: (level: number) => number): void {
+    if (rule.by === "proficiencyRank") {
+      noEnvelope.push({ target, rule, reason: "scaled by proficiency rank, not level" })
+      return
+    }
+
+    const envelope = ENVELOPE_BY_TARGET[target]
+    if (!envelope) {
+      noEnvelope.push({ target, rule, reason: `no Layer 0 envelope defined for "${target}"` })
+      return
+    }
+
+    const points = BALANCE_LEVELS.map((level) => {
+      const actual = actualAt(level)
+      const envelopeValue = envelope(level)
+      return { level, actual, envelope: envelopeValue, deltaPct: envelopeValue === 0 ? 0 : (actual - envelopeValue) / envelopeValue }
+    })
+    comparable.push({ target, points, status: statusFor(points) })
+  }
+
   for (const effect of entity.effects) {
     for (const { target, amount } of flattenValueEffects(effect)) {
       if (typeof amount === "number") {
@@ -92,24 +118,20 @@ export function balanceReportFor(entity: Entity): BalanceReport {
         continue
       }
 
-      const rule = amount
-      if (rule.by === "proficiencyRank") {
-        noEnvelope.push({ target, rule, reason: "scaled by proficiency rank, not level" })
+      if (isDiceExpression(amount)) {
+        // A flat die count ("2d6") has no level basis, same as a flat
+        // number — bucket it as unscaled, using its expected value so it's
+        // still comparable at a glance. A level-scaled count ("Nd6 where N
+        // grows with level") does have a level curve worth comparing.
+        if (typeof amount.count === "number") {
+          unscaled.push({ target, amount: expectedDiceValue(amount, {}) })
+          continue
+        }
+        pushComparableOrNoEnvelope(target, amount.count, (level) => expectedDiceValue(amount, { level, castLevel: level }))
         continue
       }
 
-      const envelope = ENVELOPE_BY_TARGET[target]
-      if (!envelope) {
-        noEnvelope.push({ target, rule, reason: `no Layer 0 envelope defined for "${target}"` })
-        continue
-      }
-
-      const points = BALANCE_LEVELS.map((level) => {
-        const actual = evaluateScalingRule(rule, { level, castLevel: level })
-        const envelopeValue = envelope(level)
-        return { level, actual, envelope: envelopeValue, deltaPct: envelopeValue === 0 ? 0 : (actual - envelopeValue) / envelopeValue }
-      })
-      comparable.push({ target, points, status: statusFor(points) })
+      pushComparableOrNoEnvelope(target, amount, (level) => evaluateScalingRule(amount, { level, castLevel: level }))
     }
   }
 

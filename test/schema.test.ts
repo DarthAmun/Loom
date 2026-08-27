@@ -34,4 +34,31 @@ describe("safeParseEntity", () => {
     expect(safeParseEntity("just a string").success).toBe(false)
     expect(safeParseEntity(null).success).toBe(false)
   })
+
+  it("accepts a DiceExpression amount, flat or level-scaled count", () => {
+    const flat = { ...sneakAttack, effects: [{ kind: "value", target: "damage", op: "+", amount: { kind: "dice", count: 2, faces: 6 } }] }
+    expect(safeParseEntity(flat).success).toBe(true)
+
+    const scaled = {
+      ...sneakAttack,
+      effects: [{ kind: "value", target: "damage", op: "+", amount: { kind: "dice", count: { by: "level", base: 1, perStep: 1, stepSize: 5 }, faces: 6 } }],
+    }
+    expect(safeParseEntity(scaled).success).toBe(true)
+  })
+
+  it("accepts a choice Effect for each ChoiceSource shape (tag pool, explicit refs, literal options)", () => {
+    const byTag = { ...sneakAttack, effects: [{ kind: "choice", bind: "arcaneSchool", count: 1, from: { kind: "entitiesByTag", tag: "wizard-arcane-school" } }] }
+    expect(safeParseEntity(byTag).success).toBe(true)
+
+    const byRefs = { ...sneakAttack, effects: [{ kind: "choice", bind: "ikon", count: 1, from: { kind: "entitiesByRefs", refs: ["ikon.blade", "ikon.shield"] } }] }
+    expect(safeParseEntity(byRefs).success).toBe(true)
+
+    const literal = { ...sneakAttack, effects: [{ kind: "choice", bind: "skill", count: 1, from: { kind: "literal", options: ["occultism", "religion"] } }] }
+    expect(safeParseEntity(literal).success).toBe(true)
+  })
+
+  it("rejects a choice Effect with an unknown ChoiceSource kind", () => {
+    const broken = { ...sneakAttack, effects: [{ kind: "choice", bind: "x", count: 1, from: { kind: "not-a-real-source" } }] }
+    expect(safeParseEntity(broken).success).toBe(false)
+  })
 })
