@@ -13,8 +13,9 @@ schema and resolution engine described in
 - **Phase 3** (done): character builder — prerequisites, conflicts,
   resources.
 - **Phase 4** (done): prerequisite graph visualization.
-- Phase 5+ (not started): provenance/balance tooling, and porting one
-  non-PF2e concept end-to-end. See the brief.
+- **Phase 5** (done): provenance & balance tooling.
+- Phase 6+ (not started): porting one non-PF2e concept end-to-end. See the
+  brief.
 
 ## Stack
 
@@ -44,7 +45,8 @@ pnpm --filter web dev   # Phase 2 UI, http://localhost:5173
 
 ```
 src/core/            Layer 0 — proficiency formula, level-scaling curves
-src/entities/         Layer 1/2/3 types — Entity, Effect, Hook + supporting types; schema.ts (zod validation)
+src/entities/         Layer 1/2/3 types — Entity, Effect, Hook + supporting types; schema.ts (zod validation);
+                        balance.ts (Phase 5 — Layer 5 balance comparison against Layer 0's envelope)
 src/character/         Layer 4 — Character, EntityInstance, GameEvent; fixtures.ts, factory.ts
 src/engine/            the resolution engine: checks, conditions, effect resolution, trigger bus
 src/data/mechanics/    the 15 mechanics from the brief, drafted as Entities
@@ -57,7 +59,8 @@ test/engine.test.ts    Phase 0 scenarios, asserted
 test/storage.test.ts   Phase 1: entity/character CRUD, Map round-trips, registry bridging
 test/schema.test.ts    Phase 2: zod validation of real (and broken) Entity JSON
 apps/web/              Analog.js UI: entity list/editor (Phase 2), character
-                        builder (Phase 3), prerequisite graph (Phase 4)
+                        builder (Phase 3), prerequisite graph (Phase 4),
+                        provenance & balance (Phase 5)
 ```
 
 ## Phase 2 — entity editor UI
@@ -114,6 +117,51 @@ matches correctly and the engine package gets handled by Vite's default
 (non-Angular) TS transform instead. Documented in that file and here in
 case a similar silent-empty-module symptom shows up again when this
 workspace grows more linked packages.
+
+## Phase 5 — provenance & balance
+
+`/provenance` — two things, per the brief and design-brief's "what's
+coming" list.
+
+**Provenance**: groups every stored Entity by its `source:` tag. Every
+drafted Entity, including the 3 archetype packages, was still tagged
+`source:core` going into this phase — `entity-summary.ts`'s `SOURCE_COLORS`
+already anticipated `pkg-martial` / `pkg-caster` / `pkg-hooks` as real
+source values (and `styles.css`'s theme comment already ties `--caster` to
+"pkg-caster source", `--gold` to "pkg-hooks source"), so this phase retags
+the package-original entities in `src/data/packages/*.ts` to match — the
+color system was built for this, it just hadn't landed yet.
+
+**Balance**: compares numeric `value` effects against Layer 0's envelope
+curves (`LevelScalingCurve`). The target→envelope mapping, deviation
+thresholds, and the actual comparison live in `src/entities/balance.ts` —
+engine-side, not in `apps/web` — since that's domain knowledge about the
+schema and Layer 0, the same split `eligibility.ts` uses over
+`engine/prerequisites.ts`: the engine decides what's comparable and what
+the numbers are, `apps/web/src/app/utils/balance.ts` only adds a display
+label on top. This only means something for effects that are actually
+level-scaled — and grep across the drafted data shows almost none are:
+every `damage`/`ac` effect except `core.sneakAttack` is a flat placeholder
+number with no level basis at all (matches Phase 0's own report: "every
+damage number... is a flat placeholder... a real damage-dice type is
+needed before this data means anything"). Rather than fake a per-level
+comparison for those, `balanceReportFor` buckets every entity's value
+effects into three groups and the page shows all three: **comparable**
+(level/castLevel-scaled, target has an envelope — currently just Sneak
+Attack vs. `expectedDamage`), **unscaled** (flat number, no level basis to
+compare), and **not level-comparable** (`by: "proficiencyRank"`, or a
+target like `hp` with no per-Entity envelope — `classHpForTier` needs a
+durability tier, which isn't a per-Entity concept). Making the gap visible
+in the UI, rather than forcing a fake comparison, follows the same pattern
+as Phase 0's report.
+
+The brief explicitly left "how much deviation from the envelope is
+acceptable" as an undecided human call. This phase makes a starting-default
+choice — `BALANCE_THRESHOLDS` in `src/entities/balance.ts`: ±20% = watch,
+±50% = off envelope — as one named, commented constant, not tuned or
+load-bearing anywhere else. Easy to retune once the envelope curves
+themselves (and the damage-dice type Phase 0 flagged as missing) are less
+placeholder.
 
 ## Phase 4 — prerequisite graph
 

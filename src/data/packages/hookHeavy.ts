@@ -12,7 +12,7 @@ export { finesse } from "../mechanics/weaponTraits.js"
 export const agile: Entity = {
   id: "pkg.hooks.agile",
   name: "Agile",
-  tags: ["source:core", "category:weapon-trait", "trait:agile"],
+  tags: ["source:pkg-hooks", "category:weapon-trait", "trait:agile"],
   prerequisites: [],
   conflicts: [],
   cost: { type: "free" },
@@ -29,7 +29,7 @@ export const agile: Entity = {
 export const versatileS: Entity = {
   id: "pkg.hooks.versatileS",
   name: "Versatile (Slashing)",
-  tags: ["source:core", "category:weapon-trait", "trait:versatile-s"],
+  tags: ["source:pkg-hooks", "category:weapon-trait", "trait:versatile-s"],
   prerequisites: [],
   conflicts: [],
   cost: { type: "free" },

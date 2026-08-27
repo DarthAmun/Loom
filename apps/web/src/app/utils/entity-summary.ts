@@ -1,4 +1,4 @@
-import { evaluateScalingRule, type ActionCost, type ConditionSpec, type Effect, type Entity, type EntityRef, type ScalingRule } from 'loom';
+import { BALANCE_LEVELS, evaluateScalingRule, type ActionCost, type ConditionSpec, type Effect, type Entity, type EntityRef, type ScalingRule } from 'loom';
 
 export function costLabel(cost: ActionCost): string {
   switch (cost.type) {
@@ -150,6 +150,27 @@ export function sourceColor(source: string): string {
   return FALLBACK_SOURCE_COLORS[hash % FALLBACK_SOURCE_COLORS.length]!;
 }
 
+export interface SourceGroup {
+  source: string;
+  color: string;
+  entities: Entity[];
+}
+
+/** Groups entities by sourceOf, `core` first then alphabetical — shared by
+ * the sidebar's per-source counts (app.ts) and the provenance page's
+ * per-source entity lists (provenance.page.ts), so both read the same
+ * grouping/sort. */
+export function groupBySource(entities: readonly Entity[]): SourceGroup[] {
+  const groups = new Map<string, Entity[]>();
+  for (const entity of entities) {
+    const source = sourceOf(entity);
+    groups.set(source, [...(groups.get(source) ?? []), entity]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === 'core' ? -1 : b === 'core' ? 1 : a.localeCompare(b)))
+    .map(([source, sourceEntities]) => ({ source, color: sourceColor(source), entities: sourceEntities }));
+}
+
 /** Canonical union for "how does this entity relate to others" — graph.ts's
  * EdgeKind is `Exclude<RelationshipKind, 'none'>` (an edge always connects
  * two entities, so it never has 'none'), kept as the derived type rather
@@ -263,6 +284,5 @@ export function scalingChartFor(entity: Entity): ScalingChartPoint[] | null {
   if (!valueEffect || typeof valueEffect.amount !== 'object') return null;
   const rule = valueEffect.amount;
   if (rule.by === 'proficiencyRank') return null;
-  const levels = [1, 5, 10, 15, 20];
-  return levels.map((level) => ({ x: `lv ${level}`, y: evaluateScalingRule(rule, { level, castLevel: level }) }));
+  return BALANCE_LEVELS.map((level) => ({ x: `lv ${level}`, y: evaluateScalingRule(rule, { level, castLevel: level }) }));
 }

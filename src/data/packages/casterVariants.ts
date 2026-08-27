@@ -12,7 +12,7 @@ export { forceBolt } from "../mechanics/spellcasting.js"
 export const emberBurst: Entity = {
   id: "pkg.caster.emberBurst",
   name: "Ember Burst",
-  tags: ["source:core", "category:spell", "trait:fire", "trait:save"],
+  tags: ["source:pkg-caster", "category:spell", "trait:fire", "trait:save"],
   prerequisites: [{ kind: "proficiency", proficiencyKey: "spellcasting.arcane", minRank: "trained" }],
   conflicts: [],
   cost: { type: "actions", count: 2 },

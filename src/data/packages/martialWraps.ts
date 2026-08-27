@@ -11,7 +11,7 @@ export { powerAttack } from "../mechanics/powerAttack.js"
 export const certainStrike: Entity = {
   id: "pkg.martial.certainStrike",
   name: "Certain Strike",
-  tags: ["source:core", "category:strike", "martial"],
+  tags: ["source:pkg-martial", "category:strike", "martial"],
   prerequisites: [{ kind: "level", minLevel: 3 }],
   conflicts: [],
   cost: { type: "inherit" },

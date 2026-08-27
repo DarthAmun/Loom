@@ -19,3 +19,16 @@ export { allPackageEntities } from "./data/packages/index.js"
 
 export { ProficiencyBonus, rankAtLeast, PROFICIENCY_RANK_ORDER, type ProficiencyRank } from "./core/proficiency.js"
 export { classHpForTier, type DurabilityTier } from "./core/scaling.js"
+
+export {
+  allBalanceReports,
+  balanceReportFor,
+  BALANCE_LEVELS,
+  BALANCE_THRESHOLDS,
+  type BalanceReport,
+  type BalanceStatus,
+  type ComparableRow,
+  type ComparablePoint,
+  type FlatRow,
+  type NoEnvelopeRow,
+} from "./entities/balance.js"

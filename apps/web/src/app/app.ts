@@ -1,13 +1,7 @@
 import { Component, OnInit, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EntityStoreService } from './services/entity-store.service';
-import { sourceColor, sourceOf } from './utils/entity-summary';
-
-interface SourceCount {
-  source: string;
-  count: number;
-  color: string;
-}
+import { groupBySource } from './utils/entity-summary';
 
 @Component({
   selector: 'app-root',
@@ -38,20 +32,19 @@ interface SourceCount {
           <a routerLink="/graph" routerLinkActive="nav-active" class="nav-link">
             <span class="nav-dot"></span>Graph
           </a>
-          <span class="nav-link" style="opacity:.45;cursor:default">
+          <a routerLink="/provenance" routerLinkActive="nav-active" class="nav-link">
             <span class="nav-dot"></span>Provenance
-            <span class="nav-count">soon</span>
-          </span>
+          </a>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:8px">
           <div class="eyebrow">sources</div>
           <div style="display:flex;flex-direction:column;gap:5px;font:400 12px/1.5 var(--font-sans);color:var(--text-muted)">
-            @for (s of sourceCounts(); track s.source) {
+            @for (g of sourceGroups(); track g.source) {
               <div style="display:flex;align-items:center;gap:8px">
-                <span style="width:3px;height:13px" [style.background]="s.color"></span>
-                {{ s.source }}
-                <span style="margin-left:auto;font:400 11px var(--font-mono);color:var(--text-dim)">{{ s.count }}</span>
+                <span style="width:3px;height:13px" [style.background]="g.color"></span>
+                {{ g.source }}
+                <span style="margin-left:auto;font:400 11px var(--font-mono);color:var(--text-dim)">{{ g.entities.length }}</span>
               </div>
             }
           </div>
@@ -99,16 +92,7 @@ interface SourceCount {
 export class App implements OnInit {
   protected readonly store = inject(EntityStoreService);
 
-  protected readonly sourceCounts = computed<SourceCount[]>(() => {
-    const counts = new Map<string, number>();
-    for (const entity of this.store.entities()) {
-      const source = sourceOf(entity);
-      counts.set(source, (counts.get(source) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort(([a], [b]) => (a === 'core' ? -1 : b === 'core' ? 1 : a.localeCompare(b)))
-      .map(([source, count]) => ({ source, count, color: sourceColor(source) }));
-  });
+  protected readonly sourceGroups = computed(() => groupBySource(this.store.entities()));
 
   ngOnInit(): void {
     void this.store.refresh();
