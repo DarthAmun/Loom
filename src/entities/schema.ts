@@ -5,7 +5,9 @@
 import { z } from "zod"
 import type { Entity } from "./types.js"
 
-const ProficiencyRankSchema = z.enum(["untrained", "trained", "expert", "master", "legendary"])
+// Exported for reuse by character/schema.ts's CharacterExportSchema — a
+// Character's proficiencies map shares this same rank enum.
+export const ProficiencyRankSchema = z.enum(["untrained", "trained", "expert", "master", "legendary"])
 
 const PrerequisiteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("entity"), entityId: z.string() }),
@@ -33,7 +35,9 @@ const CheckSpecSchema = z.object({
   attribute: z.string().optional(),
 })
 
-const DurationSpecSchema = z.object({
+// Exported for reuse by character/schema.ts's EntityInstanceSchema —
+// EntityInstance.duration is the same DurationSpec an Effect carries.
+export const DurationSpecSchema = z.object({
   unit: z.enum(["rounds", "minutes", "hours", "encounter", "permanent"]),
   value: z.number().optional(),
 })

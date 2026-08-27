@@ -35,6 +35,9 @@ import { groupBySource } from './utils/entity-summary';
           <a routerLink="/provenance" routerLinkActive="nav-active" class="nav-link">
             <span class="nav-dot"></span>Provenance
           </a>
+          <a routerLink="/data" routerLinkActive="nav-active" class="nav-link">
+            <span class="nav-dot"></span>Import / Export
+          </a>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:8px">

@@ -15,6 +15,18 @@ export type { Character, EntityInstance, GameEvent } from "./character/types.js"
 export { entityStore, loadRegistryFromDb } from "./storage/entityStore.js"
 export { characterStore, type NewCharacterParams } from "./storage/characterStore.js"
 export { type StoredCharacter } from "./storage/db.js"
+export {
+  buildExportBundle,
+  parseExportBundle,
+  importBundle,
+  EXPORT_FORMAT,
+  EXPORT_VERSION,
+  type ExportBundle,
+  type ParseBundleResult,
+  type ImportSelection,
+  type ImportSummary,
+} from "./storage/exportImport.js"
+export { type CharacterExport } from "./character/schema.js"
 
 export { allMechanics } from "./data/mechanics/index.js"
 export { allPackageEntities } from "./data/packages/index.js"
