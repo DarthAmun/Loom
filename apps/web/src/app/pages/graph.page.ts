@@ -1,8 +1,17 @@
 import { Component, OnInit, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { EntityStoreService } from '../services/entity-store.service';
-import { costLabel, RELATIONSHIP_COLOR } from '../utils/entity-summary';
-import { computeEdges, computeGraphNodes, type GraphColumn, type GraphNode } from '../utils/graph';
+import { costLabel } from '../utils/entity-summary';
+import { computeEdges, computeGraphNodes, DASHED_EDGE_KINDS, EDGE_COLOR, type EdgeKind, type GraphColumn, type GraphNode } from '../utils/graph';
+
+const LEGEND: { kind: EdgeKind; label: string }[] = [
+  { kind: 'wraps', label: 'wraps' },
+  { kind: 'trigger', label: 'trigger' },
+  { kind: 'hook', label: 'hook' },
+  { kind: 'applies', label: 'applies' },
+  { kind: 'prerequisite', label: 'prerequisite' },
+  { kind: 'conflict', label: 'conflict' },
+];
 
 const COLUMN_X: Record<GraphColumn, number> = { core: 40, mid: 400, packages: 760 };
 const COLUMN_LABEL: Record<GraphColumn, string> = { core: 'core', mid: 'wraps / listeners', packages: 'packages / invented' };
@@ -41,10 +50,16 @@ interface PositionedEdge {
           </div>
         </div>
         <div style="display:flex;gap:18px;font:400 11.5px var(--font-sans);color:var(--text-muted);align-items:center">
-          <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:2px;background:var(--wrap)"></span>wraps</span>
-          <span style="display:flex;align-items:center;gap:6px"><span class="dash-swatch"></span>trigger</span>
-          <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:2px;background:var(--hook)"></span>hook</span>
-          <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:2px;background:var(--applies)"></span>applies</span>
+          @for (item of legend; track item.kind) {
+            <span style="display:flex;align-items:center;gap:6px">
+              @if (isDashed(item.kind)) {
+                <span class="dash-swatch" [style.border-top-color]="edgeColor[item.kind]"></span>
+              } @else {
+                <span style="width:18px;height:2px" [style.background]="edgeColor[item.kind]"></span>
+              }
+              {{ item.label }}
+            </span>
+          }
         </div>
       </div>
 
@@ -163,6 +178,9 @@ export default class GraphPage implements OnInit {
   protected readonly COLUMN_LABEL = COLUMN_LABEL;
   protected readonly cardWidth = CARD_WIDTH;
   protected readonly columns: GraphColumn[] = ['core', 'mid', 'packages'];
+  protected readonly legend = LEGEND;
+  protected readonly edgeColor = EDGE_COLOR;
+  protected readonly isDashed = (kind: EdgeKind): boolean => DASHED_EDGE_KINDS.has(kind);
 
   protected readonly edges = computed(() => computeEdges(this.store.entities()));
   protected readonly unresolved = computed(() => this.edges().filter((e) => !e.resolved));
@@ -207,8 +225,8 @@ export default class GraphPage implements OnInit {
       const midX = (x1 + x2) / 2;
       out.push({
         path: `M${x1} ${y1} C${midX} ${y1} ${midX} ${y2} ${x2} ${y2}`,
-        color: RELATIONSHIP_COLOR[edge.kind],
-        dashed: edge.kind === 'trigger',
+        color: EDGE_COLOR[edge.kind],
+        dashed: DASHED_EDGE_KINDS.has(edge.kind),
         resolved: edge.resolved,
         from: edge.from,
         to: edge.to,

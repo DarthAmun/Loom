@@ -10,8 +10,11 @@ schema and resolution engine described in
   wired to Layer 0's core math.
 - **Phase 2** (done): a minimal Entity editor UI — Angular + signals, via
   Analog.js (apps/web).
-- Phase 3+ (not started): character builder, prerequisite graph,
-  provenance/balance tooling. See the brief.
+- **Phase 3** (done): character builder — prerequisites, conflicts,
+  resources.
+- **Phase 4** (done): prerequisite graph visualization.
+- Phase 5+ (not started): provenance/balance tooling, and porting one
+  non-PF2e concept end-to-end. See the brief.
 
 ## Stack
 
@@ -53,7 +56,8 @@ src/main-storage.ts     Phase 1 console demo (seed -> load -> resolve, all throu
 test/engine.test.ts    Phase 0 scenarios, asserted
 test/storage.test.ts   Phase 1: entity/character CRUD, Map round-trips, registry bridging
 test/schema.test.ts    Phase 2: zod validation of real (and broken) Entity JSON
-apps/web/              Phase 2 — Analog.js UI: entity list + JSON review/edit form
+apps/web/              Analog.js UI: entity list/editor (Phase 2), character
+                        builder (Phase 3), prerequisite graph (Phase 4)
 ```
 
 ## Phase 2 — entity editor UI
@@ -110,6 +114,45 @@ matches correctly and the engine package gets handled by Vite's default
 (non-Angular) TS transform instead. Documented in that file and here in
 case a similar silent-empty-module symptom shows up again when this
 workspace grows more linked packages.
+
+## Phase 4 — prerequisite graph
+
+Extends `/graph` (built in Phase 3 as the general entity-relationship view —
+wraps, strike-related triggers/hooks, applyEntity) with the two edge kinds
+that make it an actual *prerequisite* graph: entity-kind `Prerequisite`s
+(`prereq.kind === 'entity'`) and `conflicts`. Both are literal id
+references in the schema, same as `wraps`/`applyEntity`, so they're drawn
+as solid structural edges — except `conflict`, drawn dashed like `trigger`
+since it's a mutual-exclusion marker rather than a flow. Conflicts are
+deduped by unordered id pair (`apps/web/src/app/utils/graph.ts`'s
+`conflictPairsSeen`) since the schema doesn't guarantee a conflict is
+declared on only one side — same both-ways check `eligibility.ts` already
+does for the character builder's picker.
+
+`EdgeKind` (`wraps | trigger | hook | applies | prerequisite | conflict`)
+is its own type in `graph.ts`, not derived from `entity-summary.ts`'s
+`RelationshipKind` — that type picks one *primary* label per entity for
+list-row/stripe coloring, but an entity can carry several prerequisites
+and several conflicts at once, so edges need their own union and their own
+color map (`EDGE_COLOR`, also in `graph.ts`).
+
+## Phase 3 — character builder
+
+`apps/web/src/app/pages/characters/` — create a character (name, level,
+durability tier; starting HP from Layer 0 math via
+`characterStore.create`), inline-edit attributes/proficiencies/resources,
+and add Entities from a picker backed by real prerequisite/conflict
+checking (`apps/web/src/app/utils/eligibility.ts`) against
+`src/engine/prerequisites.ts`'s `evaluatePrerequisites` (mirrors
+`engine/conditions.ts`'s `evaluateConditions` shape, evaluated against a
+Character's own state rather than a live event). The builder's footer also
+surfaces live warnings: an active entity whose prerequisites are no longer
+met (state can change after a pick — e.g. a conflicting choice came
+later), and two active entities hooking the same `appliesTo` with no
+defined resolution order. Doesn't execute the resolution engine — adding
+an entity tracks it as active but doesn't run its effects (e.g. Rage's
+`applyEntity` buff isn't actually applied); real effect execution is still
+open per the design brief's "what's coming" list.
 
 ## Phase 1 — storage
 

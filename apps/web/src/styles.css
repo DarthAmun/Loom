@@ -61,6 +61,7 @@
   --note-text: oklch(0.86 0.08 95);
 
   --applies: oklch(0.5 0.01 80);
+  --conflict: oklch(0.62 0.18 20);
 
   color-scheme: dark;
 }
